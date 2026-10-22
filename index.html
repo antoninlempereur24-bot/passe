@@ -1,9 +1,9 @@
-<!DOCTYPE html>
+ <!DOCTYPE html>
 <html lang="fr">
-<head> 
-    <link rel="icon" type="image/jpeg" href="5d13fd69-ab68-4dc9-a696-70cb7902447f.jpeg">
+<head>
+     <link rel="icon" type="image/jpeg" href="5d13fd69-ab68-4dc9-a696-70cb7902447f.jpeg">
     <link rel="apple-touch-icon" href="5d13fd69-ab68-4dc9-a696-70cb7902447f.jpeg">
-
+    
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>Générateur & Scanner de Pass VIP</title>
@@ -803,6 +803,16 @@
             initQrCode();
             updateBadge();
             renderCardsList();
+
+            // Écouteur pour valider la saisie manuelle avec la touche Entrée
+            const manualInput = document.getElementById('manualScanInput');
+            if (manualInput) {
+                manualInput.addEventListener('keydown', function(e) {
+                    if (e.key === 'Enter') {
+                        submitManualScan();
+                    }
+                });
+            }
         };
 
         function loadLocalStorage() {
@@ -943,18 +953,39 @@
             }
         }
 
-        // Scanner Caméra Anti-Double Scan
+        // Scanner Caméra Fiabilisé
         function startScanner() {
             stopScanner();
             isProcessingScan = false;
             setTimeout(() => {
+                const readerElement = document.getElementById('reader');
+                if (!readerElement) return;
+
                 html5QrcodeScanner = new Html5Qrcode("reader");
+                const config = { 
+                    fps: 15, 
+                    qrbox: function(viewfinderWidth, viewfinderHeight) {
+                        let minSize = Math.min(viewfinderWidth, viewfinderHeight);
+                        let qrboxSize = Math.floor(minSize * 0.75);
+                        return { width: qrboxSize, height: qrboxSize };
+                    },
+                    aspectRatio: 1.0
+                };
+
                 html5QrcodeScanner.start(
                     { facingMode: "environment" },
-                    { fps: 10, qrbox: { width: 220, height: 220 } },
+                    config,
                     onScanSuccess,
                     onScanFailure
-                ).catch(err => console.log("Caméra:", err));
+                ).catch(err => {
+                    console.log("Caméra arrière non disponible, tentative caméra par défaut...", err);
+                    html5QrcodeScanner.start(
+                        { facingMode: "user" },
+                        config,
+                        onScanSuccess,
+                        onScanFailure
+                    ).catch(err2 => console.log("Erreur critique caméra:", err2));
+                });
             }, 300);
         }
 
@@ -972,11 +1003,13 @@
         function restartScanner() { startScanner(); }
 
         function verifyCardNumber(scannedNum) {
-            if (isProcessingScan) return; // Empêche la double exécution
+            if (isProcessingScan) return;
+            if (!scannedNum) return;
+
             isProcessingScan = true;
 
-            const cleanNum = scannedNum.trim().replace('#', '');
-            const card = appData.cards.find(c => c.number.trim() === cleanNum);
+            const cleanNum = scannedNum.trim().replace('#', '').trim();
+            const card = appData.cards.find(c => c.number.trim().toLowerCase() === cleanNum.toLowerCase());
 
             if (!card) {
                 showScanModal('danger', '❌', 'ACCÈS REFUSÉ', `Pass #${cleanNum} non trouvé dans le système.`);
@@ -992,13 +1025,17 @@
             }
         }
 
-        function onScanSuccess(decodedText) { verifyCardNumber(decodedText); }
+        function onScanSuccess(decodedText) { 
+            verifyCardNumber(decodedText); 
+        }
 
         function submitManualScan() {
-            const val = document.getElementById('manualScanInput').value;
+            const inputEl = document.getElementById('manualScanInput');
+            const val = inputEl.value.trim();
             if (val) {
+                isProcessingScan = false; // Réinitialise le verrou pour forcer la recherche manuelle
                 verifyCardNumber(val);
-                document.getElementById('manualScanInput').value = '';
+                inputEl.value = '';
             }
         }
 
@@ -1026,7 +1063,6 @@
 
         function closeScanModal() {
             document.getElementById('scanModal').classList.remove('show');
-            // Réautorise le scan pour la carte suivante
             setTimeout(() => { isProcessingScan = false; }, 500);
         }
 
