@@ -2,8 +2,7 @@
 <html lang="fr">
 <head>
      <link rel="icon" type="image/jpeg" href="5d13fd69-ab68-4dc9-a696-70cb7902447f.jpeg">
-    <link rel="apple-touch-icon" href="5d13fd69-ab68-4dc9-a696-70cb7902447f.jpeg">
-    
+    <link rel="apple-touch-icon" href="5d13fd69-ab68-4dc9-a696-70cb7902447f.jpeg"
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>Générateur & Scanner de Pass VIP</title>
@@ -789,7 +788,7 @@
         let currentGradientBg = 'linear-gradient(145deg, #101c3d 0%, #080e22 100%)';
         let html5QrcodeScanner = null;
         let qrCodeObj = null;
-        let isProcessingScan = false; // Verrou anti-double scan
+        let isProcessingScan = false;
 
         let appData = {
             companyName: "NIGHT OF ELEGANCE",
@@ -804,7 +803,6 @@
             updateBadge();
             renderCardsList();
 
-            // Écouteur pour valider la saisie manuelle avec la touche Entrée
             const manualInput = document.getElementById('manualScanInput');
             if (manualInput) {
                 manualInput.addEventListener('keydown', function(e) {
@@ -853,13 +851,40 @@
             document.getElementById('badgeCard').style.background = currentGradientBg;
         }
 
+        // Upload photo sécurisé avec redimensionnement/compression (anti-blocage)
         function handlePhotoUpload(event) {
             const file = event.target.files[0];
             if (file) {
                 const reader = new FileReader();
                 reader.onload = function(e) {
-                    currentPhotoBase64 = e.target.result;
-                    document.getElementById('badgePhotoImg').src = currentPhotoBase64;
+                    const img = new Image();
+                    img.onload = function() {
+                        const canvas = document.createElement('canvas');
+                        const MAX_SIZE = 300;
+                        let width = img.width;
+                        let height = img.height;
+
+                        if (width > height) {
+                            if (width > MAX_SIZE) {
+                                height *= MAX_SIZE / width;
+                                width = MAX_SIZE;
+                            }
+                        } else {
+                            if (height > MAX_SIZE) {
+                                width *= MAX_SIZE / height;
+                                height = MAX_SIZE;
+                            }
+                        }
+
+                        canvas.width = width;
+                        canvas.height = height;
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(img, 0, 0, width, height);
+
+                        currentPhotoBase64 = canvas.toDataURL('image/jpeg', 0.8);
+                        document.getElementById('badgePhotoImg').src = currentPhotoBase64;
+                    };
+                    img.src = e.target.result;
                 };
                 reader.readAsDataURL(file);
             }
@@ -978,7 +1003,6 @@
                     onScanSuccess,
                     onScanFailure
                 ).catch(err => {
-                    console.log("Caméra arrière non disponible, tentative caméra par défaut...", err);
                     html5QrcodeScanner.start(
                         { facingMode: "user" },
                         config,
@@ -1033,7 +1057,7 @@
             const inputEl = document.getElementById('manualScanInput');
             const val = inputEl.value.trim();
             if (val) {
-                isProcessingScan = false; // Réinitialise le verrou pour forcer la recherche manuelle
+                isProcessingScan = false;
                 verifyCardNumber(val);
                 inputEl.value = '';
             }
